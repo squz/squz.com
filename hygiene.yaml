@@ -1,0 +1,430 @@
+# hygiene.yaml — declared, drift-validated hygiene posture for squz.com.
+# Schema reference: the `hygiene` skill (~/.claude/skills/hygiene/SKILL.md).
+# Validate with `/hygiene`; aggregate the fleet with `/hygiene fleet`.
+#
+# Public GitHub Pages marketing/legal host (static HTML, inline CSS, no JS).
+# No tests, CI, LICENSE, .gitignore, or in-repo workflows. Deploy is GitHub's
+# pages-build-deployment from unprotected `main` `/`. Floors are held tiers
+# this tree already reaches; gaps sit above the floor as planned/skipped.
+# Snapshot: docs/audits/entropy-audit-2026-08-22.md.
+
+schema_version: 1
+
+repo: squz.com
+aspires: 3
+floors:            # per-dimension held-tier ratchet; below floor => DRIFT
+  correctness: 0   # no tests, no CI; live 404s uncaught (ENT-001)
+  security: 0      # secret scanning and push protection disabled
+  quality: 0       # no HTML/CSS linter or formatter
+  deps: 1          # no package manager; skip is the held empty graph
+  release: 1       # Pages + CNAME squz.com + HTTPS; no test gate
+  governance: 0    # README only; no LICENSE or .gitignore
+  build: 0         # no Makefile/bundler; Pages serves tracked HTML
+  docs: 1          # README present; no link check, AGENTS.md, or bullseye
+  perf: 0          # static HTML; no benchmark surface
+  vcs: 0           # default branch is main; no hooks; unprotected
+  agent: 0         # no CLAUDE.md / AGENTS.md / bullseye.yaml
+
+tiers:
+  1: baseline    # LICENSE + README + .gitignore; tests build & run
+  2: maintained  # full matrix, examples run, lint/format, release + governance
+  3: hardened    # formal specs, security scanning, SBOM/signing, fuzzing, perf
+
+items:
+
+  # ============================== CORRECTNESS =============================
+  - id: correctness.tests
+    dim: correctness
+    desc: Automated suite exists (asset/href checker over tracked HTML)
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 1
+    reason: >-
+      No tests directory or runner. Entropy ENT-001: homepage
+      media/yourworld-screenshot.jpg 404s on https://squz.com/.
+    evidence: {absent: {file: {path: tests}}}
+
+  - id: correctness.ci
+    dim: correctness
+    desc: Per-push GitHub Actions workflow runs the suite
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 2
+    reason: >-
+      No in-repo workflow. The only Actions workflow is GitHub-owned
+      pages-build-deployment (dynamic path, not a repo gate).
+    evidence: {absent: {file: {path: .github/workflows/ci.yml}}}
+
+  - id: correctness.link-check
+    dim: correctness
+    desc: Shipped href/src URLs are checked against the live Pages host
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 2
+    reason: >-
+      No link checker. Live 404s (hero image; App Store-cited
+      /multimaze.html) are uncaught in CI or locally.
+    evidence: {absent: {ci_job: "ci.yml#links"}}
+
+  - id: correctness.journeys
+    dim: correctness
+    desc: Playwright (or equivalent) smoke covers shipped Pages URLs
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 3
+    reason: Owner-visible path is static HTML on GitHub Pages; no browser oracle.
+    evidence: {absent: {file: {path: playwright.config.js}}}
+
+  # =========================== SECURITY / SUPPLY ==========================
+  - id: security.secret-scan
+    dim: security
+    desc: GitHub secret scanning enabled on the repo
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: >-
+      security_and_analysis.secret_scanning.status is disabled (public
+      repo; scanning is available and off). Attack surface is HTML/CNAME.
+    evidence:
+      absent:
+        gh_setting:
+          key: security_and_analysis.secret_scanning.status
+          equals: enabled
+
+  - id: security.push-protection
+    dim: security
+    desc: GitHub secret-scanning push protection enabled
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: secret_scanning_push_protection.status is disabled.
+    evidence:
+      absent:
+        gh_setting:
+          key: security_and_analysis.secret_scanning_push_protection.status
+          equals: enabled
+
+  - id: security.gitleaks
+    dim: security
+    desc: gitleaks (or equivalent) scanner in-repo / in Actions
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: No gitleaks config, no CI, no committed hooks.
+    evidence: {absent: {scanner: {tool: gitleaks}}}
+
+  - id: security.sast-codeql
+    dim: security
+    desc: CodeQL static analysis
+    state: skipped
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: Static HTML with no application JavaScript; CodeQL would not add signal.
+    evidence: {absent: {ci_job: "ci.yml#codeql"}}
+
+  - id: security.dependabot
+    dim: security
+    desc: Dependabot security updates enabled
+    state: skipped
+    cadence: periodic:30d
+    enforce: informational
+    tier: 3
+    reason: No lockfile or package manifest; Dependabot security updates are disabled.
+    evidence: {absent: {file: {path: .github/dependabot.yml}}}
+
+  - id: security.actions-perms
+    dim: security
+    desc: In-repo workflow declares an explicit permissions block
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No in-repo workflows; Pages deploy is platform-owned.
+    evidence: {absent: {file: {path: .github/workflows}}}
+
+  # ============================== CODE QUALITY ============================
+  - id: quality.html-lint
+    dim: quality
+    desc: HTMLHint / html-validate (or equivalent) config exists and is invoked
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: >-
+      No HTMLHint/html-validate config. System tidy is HTML4-era (2006) and
+      is not a project gate.
+    evidence: {absent: {file: {path: .htmlhintrc}}}
+
+  - id: quality.format
+    dim: quality
+    desc: Sources are prettier/biome-clean, enforced in CI
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: No formatter config; HTML/CSS is formatted by hand.
+    evidence: {absent: {file: {path: .prettierrc}}}
+
+  # =========================== DEPENDENCY HEALTH ==========================
+  - id: deps.lockfile
+    dim: deps
+    desc: No package-manager lockfile (empty dependency graph)
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 1
+    reason: >-
+      Static HTML/CSS only; no package.json, go.mod, Cargo.toml, or
+      pyproject.toml. Freshness and Dependabot are N/A until a manifest
+      appears.
+    evidence: {absent: {file: {path: package.json}}}
+
+  # ========================== RELEASE & VERSIONING =======================
+  - id: release.pages
+    dim: release
+    desc: GitHub Pages serves the static site from main/
+    state: present
+    cadence: continuous
+    enforce: warning
+    tier: 1
+    evidence: {gh_setting: {key: has_pages, equals: true}}
+
+  - id: release.cname
+    dim: release
+    desc: Custom domain squz.com is declared in CNAME
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: CNAME, matches: '(?m)^squz\.com$'}}
+
+  - id: release.https
+    dim: release
+    desc: GitHub Pages enforces HTTPS on squz.com
+    state: present
+    cadence: continuous
+    enforce: warning
+    tier: 1
+    evidence:
+      command: test "$(gh api repos/squz/squz.com/pages --jq .https_enforced)" = true
+
+  - id: release.test-before-deploy
+    dim: release
+    desc: A test job gates Pages deploys (or main pushes)
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 2
+    reason: Legacy Pages from unprotected main; push to main is the ship path with no CI gate.
+    evidence: {absent: {file: {path: .github/workflows/ci.yml}}}
+
+  - id: release.changelog
+    dim: release
+    desc: A maintained CHANGELOG records user-visible changes per release
+    state: skipped
+    cadence: per-release
+    enforce: informational
+    tier: 3
+    reason: Not a versioned product; Pages auto-deploys main. History lives in git.
+    evidence: {absent: {file: {path: CHANGELOG.md}}}
+
+  # ============================ GOVERNANCE / META ========================
+  - id: governance.readme
+    dim: governance
+    desc: README present
+    state: present
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {file: {path: README.md}}
+
+  - id: governance.license
+    dim: governance
+    desc: LICENSE present (reuse terms for a public Pages repo)
+    state: planned
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    reason: Public repo; licenseInfo is null and no LICENSE file.
+    evidence: {absent: {file: {path: LICENSE}}}
+
+  - id: governance.gitignore
+    dim: governance
+    desc: In-repo .gitignore covers OS/IDE files
+    state: planned
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    reason: No .gitignore; the tree is static HTML but .DS_Store etc. can still land.
+    evidence: {absent: {file: {path: .gitignore}}}
+
+  - id: governance.squash-only
+    dim: governance
+    desc: Repo is squash-merge only, with delete-branch-on-merge
+    state: enforced
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 2
+    evidence: {gh_setting: {key: allow_merge_commit, equals: false}}
+
+  - id: governance.security-md
+    dim: governance
+    desc: SECURITY.md documents the vulnerability-disclosure process
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Public repo without a published disclosure policy.
+    evidence: {absent: {file: {path: SECURITY.md}}}
+
+  - id: governance.branch-protection
+    dim: governance
+    desc: Default branch (main) is protected with required checks
+    state: planned
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 3
+    reason: gh api branches/main/protection returns 404; Pages ships unprotected main.
+    evidence:
+      absent:
+        command: gh api repos/squz/squz.com/branches/main/protection --silent
+
+  # ================================= BUILD ===============================
+  - id: build.ci
+    dim: build
+    desc: CI installs tooling and checks the tree on every push
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 2
+    reason: Static site with no bundler and no in-repo workflow that verifies HTML.
+    evidence: {absent: {file: {path: .github/workflows/ci.yml}}}
+
+  - id: build.makefile
+    dim: build
+    desc: Makefile (or equivalent) build target
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Static GitHub Pages; tracked HTML is the artifact. No compile step.
+    evidence: {absent: {file: {path: Makefile}}}
+
+  # ============================ DOCUMENTATION ============================
+  - id: docs.readme
+    dim: docs
+    desc: Root README describes the Pages host
+    state: present
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {file: {path: README.md}}
+
+  - id: docs.link-check
+    dim: docs
+    desc: Internal and shipped URLs resolve (no dead href/src)
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: >-
+      README is a one-liner still describing Your World only (Esfera and
+      MultiMaze trees exist). No markdown/HTML link-checker job.
+    evidence: {absent: {ci_step: {workflow: ci.yml, name: Check links}}}
+
+  - id: docs.bullseye
+    dim: docs
+    desc: bullseye.yaml is the intent ledger for followable work
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No bullseye.yaml; followable work is not declared in-repo.
+    evidence: {absent: {file: {path: bullseye.yaml}}}
+
+  # ============================== PERFORMANCE ===========================
+  - id: perf.benchmarks
+    dim: perf
+    desc: Benchmark suite exists
+    state: planned
+    cadence: per-release
+    enforce: informational
+    tier: 3
+    reason: Static HTML Pages host; no runtime to benchmark.
+    evidence: {absent: {file: {path: benches}}}
+
+  # ============================== VCS / HISTORY =========================
+  - id: vcs.default-branch-master
+    dim: vcs
+    desc: Default branch is master (fleet convention)
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 2
+    reason: >-
+      GitHub default_branch is main; Pages source is branch main path /.
+      Fleet convention is master.
+    evidence:
+      absent:
+        gh_setting: {key: default_branch, equals: master}
+
+  - id: vcs.branch-protection
+    dim: vcs
+    desc: Default branch is protected (required checks / no force-push)
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 2
+    reason: Branch protection on main returns 404; Pages ships on push to main.
+    evidence:
+      absent:
+        command: gh api repos/squz/squz.com/branches/main/protection --silent
+
+  - id: vcs.pre-commit-hook
+    dim: vcs
+    desc: Committed git hooks (scripts/hooks) gate locally before commit
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No scripts/hooks; core.hooksPath is the default .git/hooks.
+    evidence: {absent: {file: {path: scripts/hooks/pre-commit}}}
+
+  # =================== AGENT-READINESS / ONBOARDING ====================
+  - id: agent.claude-md
+    dim: agent
+    desc: CLAUDE.md or AGENTS.md present (conventions discoverable by agents)
+    state: planned
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    reason: No in-repo AGENTS.md or CLAUDE.md.
+    evidence: {absent: {file: {path: CLAUDE.md}}}
+
+  - id: agent.agents-md
+    dim: agent
+    desc: AGENTS.md present as the shared multi-tool instruction file
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 2
+    reason: No AGENTS.md.
+    evidence: {absent: {file: {path: AGENTS.md}}}
+
+  - id: agent.bullseye
+    dim: agent
+    desc: bullseye.yaml present (convergence targets discoverable)
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No bullseye.yaml.
+    evidence: {absent: {file: {path: bullseye.yaml}}}
